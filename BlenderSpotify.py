@@ -1,13 +1,11 @@
-import bpy, sys, threading, time, subprocess
-sys.path.append('/home/fexp/.local/lib/python3.11/site-packages')
-from PyQt5 import QtDBus
+import bpy, threading, time, subprocess
 
 bl_info = {
     "name": "Blender Spotify",
     "author": "FuzzyExpress",
-    "version": (0, 0, 1, 20),
+    "version": (0, 0, 1, 25),
     "description": """Automatically Pause or Play Spotify based on Blender Viewport Playback
-    !! REQUIRES `PyQt5` and `playerctl` !!""",
+    !! Requires playerctl to be installed !!""",
     "blender": (4, 1, 0),
     "category": "Interface",
 }
@@ -17,26 +15,36 @@ PlayerName = 'spotify' # change this to what ever media player you prefer
 global BlenderSpotifyMC
 BlenderSpotifyMC = None
 
+def PlayerPlaying(action = None):
+    """
+    Returns wether or not the player is playing audio.\n
+    If provided with a Boolean, it will set playing instead.
+    """
+
+    if action == None:
+        r = subprocess.run(f'playerctl -p {PlayerName} status', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode()
+    else:
+        send = 'play' if action else 'pause';
+        r = subprocess.run(f'playerctl -p {PlayerName} {send}', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode()
+
+
+    if 'No players found' in r:
+        raise Exception( f"{PlayerName} was not found by playerctl!:\nERROR: {r}" )
+    elif 'playerctl: not found' in r:
+        raise FileNotFoundError( f"playerctl was not found!:\nERROR: {r}\nPlease Install it!" )
+    
+    if action == None: return 'Playing' in r
+    else: return not action 
+    
+
 class MusicController:
     bl_idname = "wm.modal_timer_operator"
     bl_label = "Controller Start Stop | Modal Timer Operator"
 
     def __init__(self):
-        self.service = f'org.mpris.MediaPlayer2.{PlayerName}'
-        self.path    = '/org/mpris/MediaPlayer2'
-        self.iface   = 'org.mpris.MediaPlayer2.Player'
-        self.props   = 'org.freedesktop.DBus.Properties'
-        
-        try:
-            self.smp = QtDBus.QDBusInterface(self.service, self.path, self.props)
-        except AttributeError:
-            print("Failed to create D-Bus interface. Make sure you have PyQt5 installed.")
-
         self.Playing         = False
         self.SetPlaying      = False
-        playing = True if 'Playing' in self.smp.call('Get', self.iface, 'PlaybackStatus').arguments()[0] else False
-        self.MusicPlaying    = playing
-        self.MusicWasPlaying = playing
+        self.MusicWasPlaying = PlayerPlaying()
         self.Frame = -1
 
         # Create the thread object but don't start it yet
@@ -47,7 +55,7 @@ class MusicController:
         self.MC_Thread.start()
 
     def IsRunning(self):
-        return self.Running;
+        return self.Running;    
 
     def setBlenderPlaying(self, p):
       #  print(f'set playing to {p}')
@@ -60,45 +68,20 @@ class MusicController:
 
     def TimerLoop(self):
         while self.Running:
-            if True:
-
-              #  LastFrame = self.Frame
-              #  self.Frame = bpy.data.scenes["Scene"].frame_current
-                                
+            if True: #// the sound in VSE check was here, but had to be moved due to it being called before regitration was complete
                 LastPlaying = self.Playing
                 self.Playing = self.SetPlaying > 0 #get play state(boolean) 
                 self.SetPlaying -= 1;
 
-                msg = self.smp.call('Get', self.iface, 'PlaybackStatus')
-
-                LastMusicPlaying = self.MusicPlaying
-                self.MusicPlaying = True if 'Playing' in msg.arguments()[0] else False
-
                 if LastPlaying != self.Playing: 
-                  #  print('Blender Playing Changed:', self.Playing)
+                    print('Blender Playing Changed:', self.Playing)
                     if self.Playing:
-                        self.MusicWasPlaying = self.MusicPlaying;
-                    #  print('Was Playing:', self.MusicPlaying)
-                    
+                        self.MusicWasPlaying = PlayerPlaying()
+                        print('Was Playing:', self.MusicWasPlaying)
+                        PlayerPlaying(False)
 
-                if LastMusicPlaying != self.MusicPlaying: ...
-                  #  print(PlayerName, 'Playing Changed:', self.MusicPlaying)
-
-                if self.Playing and self.MusicPlaying:
-                  #  self.MusicWasPlying = True;
-
-                    ## put stop playing here
-                  #  print('Try Pause')
-                    subprocess.run(f'playerctl -p {PlayerName} pause', shell=True)
-
-                if not self.Playing and self.MusicWasPlaying:
-                    self.MusicWasPlaying = False;
-
-                    ## put start playing here
-                  #  print('Try Play')
-                    subprocess.run(f'playerctl -p {PlayerName} play', shell=True)
-                
-              #  print(self.Playing, self.MusicPlaying, self.MusicPlaying)
+                    elif self.MusicWasPlaying:
+                        PlayerPlaying(True)
 
                 time.sleep(1/2)
 
