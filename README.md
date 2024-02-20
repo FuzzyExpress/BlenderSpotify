@@ -7,3 +7,4 @@ The premis is simple: If blender has audio enabled, and a sound track is present
 - only Linux or other MPRIS systems are supported.
 - `PyQt5` and `playerctl` are reqired. (I relized I could just use `playerctl`, I will do this later)
 - The addon is for Blender 4.1, though anything 4.0+ should work (untested)
+- Also my code is trash and it seems to jus tnot work half the time, I'll see if I can get that fixed.
